@@ -4,7 +4,8 @@
 //  /\__|    \  ___/|  |   |  |   |  | \/\  ___/\___  |  |    `   \/ __ \|   Y  \  Y Y  \  ___/|  | \/
 //  \________|\___  >__|   |__|   |__|    \___  > ____| /_______  (____  /___|  /__|_|  /\___  >__|   
 //                \/                          \/\/              \/     \/     \/      \/     \/       
-//  v 0.8
+//  v 0.9
+//  code tested on Teensy 3.1 and it will work the same on 3.2
 
 #include <Servo.h> 
 #include <PulsePosition.h> //https://www.pjrc.com/teensy/td_libs_PulsePosition.html
@@ -34,14 +35,10 @@ Servo RYservo;
 Servo flipperServo;
 Servo clawServo;
 
-int X_max_travel = 1200;
-int Y_max_travel = 1200;
+int X_max_travel = 1400;
+int Y_max_travel = 1400;
 int flipper_max_travel = 750;
 int claw_max_travel = 485;
-
-int X_center = 908;
-int Y_center = 1100;
-
 
 int LX_HOME = 2250;
 int LX_MAX = LX_HOME;
@@ -58,7 +55,7 @@ int LY_MIN = LY_HOME;
 int LY_MAX = LY_HOME + Y_max_travel;
 int LY_position = 0;
 
-int RY_HOME = 2250;
+int RY_HOME = 2235;
 int RY_MAX = RY_HOME;
 int RY_MIN = RY_HOME - Y_max_travel; ///here bug? RY_MIN = 1050
 int RY_position = 0;
@@ -73,11 +70,14 @@ int claw_MIN = claw_HOME;
 int claw_MAX = claw_HOME + claw_max_travel;
 int claw_position = 0;
 
-int L_V_center = 1500;
-int L_H_center = 1503;
+int L_V_center = 1477;
+int L_V_max = 1900;
+int L_H_center = 1543;
+int L_H_max = 1900;
 int R_V_center = 1498;
+int R_V_max = 1900;
 int R_H_center = 1498;
-
+int R_H_max = 1900;
 
 PulsePositionInput myIn;
 
@@ -108,16 +108,21 @@ bool POWER_ON = false;
 int R_H, R_V, L_V, L_H, GEAR, GYRO;
 int LX, LY, RX, RY;
 
-void loop() {
-  myIn.available();
-  
-  R_H  = myIn.read(1); // Right Horizontal stick
-  R_V  = myIn.read(2); // Right Vertical stick
-  L_V  = myIn.read(3); // Left Vertical stick
-  L_H  = myIn.read(4); // Left Horizontal stick
-  GEAR = myIn.read(5); // F-MODE/GEAR switch
-  GYRO = myIn.read(6); // FLAP/GYRO switch (how to setup CH6 on Orange https://www.youtube.com/watch?v=gUUHXaK4PKg)
 
+
+
+
+void loop() {
+  
+  if (myIn.available()==6) {
+        R_H  = myIn.read(1); // Right Horizontal stick
+        R_V  = myIn.read(2); // Right Vertical stick
+        L_V  = myIn.read(3); // Left Vertical stick
+        L_H  = myIn.read(4); // Left Horizontal stick
+        GEAR = myIn.read(5); // F-MODE/GEAR switch
+        GYRO = myIn.read(6); // FLAP/GYRO switch (how to setup CH6 on Orange https://www.youtube.com/watch?v=gUUHXaK4PKg)
+  }
+  
   if (GEAR > 1750) AUTO = true; else AUTO = false; //GEAR=1070 if receiver is not connected to transmiter, so it's in Manual mode by default/reciver is OFF/not_connected
 
   if (GYRO > 1750) { //GYRO=1497 if receiver is not connected to transmiter
@@ -133,7 +138,8 @@ void loop() {
         if (L_V>1900 && R_V>1900) {
             POWER_ON = true;
             digitalWrite(13, HIGH);
-            awakening(); // move all servos from home position to work position            
+            //awakening(); // move all servos from home position to work/center position
+            startFromCenter(690, 900); // go to center position immediately
         } else {
             digitalWrite(13, LOW);
         }
@@ -145,13 +151,13 @@ void loop() {
             switch (mode) {
                 case 0: walkAlgorithmA(); break;
                 case 1: walkAlgorithmB(); break;
-                case 2: walkAlgorithmB(); break;
+                case 2: walkAlgorithmC(); break;
             }        
         } else {    //Manual mode
             switch (mode) {
-                case 0: manualModeA(); break;
-                case 1: manualModeB(); break;
-                case 2: manualModeC(); break;
+                case 0: manualModeA(700, 865, 300, 300); break;
+                case 1: manualModeB(950, 865, 300, 300); break;
+                case 2: manualModeC(800, 865, 300, 300); break;
             }
         }
   } else {
@@ -164,6 +170,10 @@ void loop() {
   }
 
 }
+
+
+
+
 
 void LXservoMove (int q) {
      int w = LX_HOME - q;
@@ -219,29 +229,42 @@ void clawMove (int q) {
 }
 
 //// Each axis on sticks control each servo on robot arms
-void manualModeA () { 
-              LX = map(L_V, L_V_center, 1900, X_center, X_center+400);
-              LY = map(L_H, L_H_center, 1900, Y_center, Y_center+400);
-              RX = map(R_V, R_V_center, 1900, X_center, X_center+400);
-              RY = map(R_H, R_H_center, 1900, Y_center, Y_center+400);
-            //Serial.print("  LX: "); Serial.print(LX);
-            //Serial.print("  LY: "); Serial.print(LY);
-            //Serial.print("  RX: "); Serial.print(RX);
-            //Serial.print("  RY: "); Serial.println(RY);
-              LXservo.writeMicroseconds(LX);
-              LYservo.writeMicroseconds(LY);
-              RXservo.writeMicroseconds(RX);
-              RYservo.writeMicroseconds(RY);
-    
+void manualModeA (int x_center, int y_center, int x_max, int y_max) {
+              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
+              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
+              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max);
+              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max);
+              LXservoMove(LX); 
+              RXservoMove(RX);
+              LYservoMove(LY);
+              RYservoMove(RY);
 }
 
 //// Left stick control claw rotation in OPEN LOOP, and servo on gripper
 //// Right stick control arms synchronously.
-void manualModeB () {}
+void manualModeB (int x_center, int y_center, int x_max, int y_max)  {
+              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
+              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
+              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max);
+              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max);
+              LXservoMove(RX); 
+              RXservoMove(RX);
+              LYservoMove(RY);
+              RYservoMove(RY);
+}
 
 //// Left stick control claw rotation in CLOSED LOOP, and servo on gripper
 //// Right stick control arms synchronously.
-void manualModeC () {}
+void manualModeC (int x_center, int y_center, int x_max, int y_max)  {
+              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
+              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
+              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max); //dont change
+              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max); //dont change
+              LXservoMove(x_center+765-RX); 
+              RXservoMove(RX);
+              LYservoMove(RY); 
+              RYservoMove(RY);
+}
 
 void walkAlgorithmA () {}
 
@@ -254,6 +277,23 @@ void showOffA () {}
 void showOffB () {}
 
 void showOffC () {}
+
+void startFromCenter (int x, int y) {
+      LXservo.attach(LXservoPin);
+      LXservoMove(x);
+      RXservo.attach(RXservoPin);
+      RXservoMove(x);
+      LYservo.attach(LYservoPin);
+      LYservoMove(y);
+      RYservo.attach(RYservoPin);
+      RYservoMove(y);
+ 
+      flipperServo.attach(flipperServoPin); 
+      flipperMove(0);
+      
+      clawServo.attach(clawServoPin);
+      clawMove(0);
+  }
 
 void awakening () {
   
@@ -275,7 +315,6 @@ void awakening () {
       delay(100);
       clawServo.detach();
 
-
       for(int i=0; i<= 300; i++) {
           LXservoMove(i);
           delay(6);
@@ -292,14 +331,12 @@ void awakening () {
           delay(4);
       }
       
-      delay(500);
-      
       clawServo.attach(clawServoPin);
       clawMove(claw_max_travel);
       flipperMove(flipper_max_travel);  
       
-      LXservoMove(LX_position+390); 
-      RXservoMove(RX_position+390);
+      LXservoMove(LX_position + 390); 
+      RXservoMove(RX_position + 390);
       LYservoMove(LY_position + 1200);
       RYservoMove(RY_position + 1200);
 
