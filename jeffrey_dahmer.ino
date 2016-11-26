@@ -35,40 +35,41 @@ Servo RYservo;
 Servo flipperServo;
 Servo clawServo;
 
-int X_max_travel = 1400;
+int X_max_travel = 1400; //max travel from home position
 int Y_max_travel = 1400;
 int flipper_max_travel = 750;
 int claw_max_travel = 485;
 
+int LX_0 = 1560, LX_0f = LX_0;
+int LY_0 = 1620, LY_0f = LY_0;
+int RX_0 = 1500, RX_0f = RX_0;
+int RY_0 = 1370, RY_0f = RY_0;
+
+int LX_pos, LY_pos, RX_pos, RY_pos, flipper_pos, claw_pos = 0;
+
 int LX_HOME = 2250;
 int LX_MAX = LX_HOME;
 int LX_MIN = LX_HOME - X_max_travel;
-int LX_position = 0;
 
 int RX_HOME = 810;
 int RX_MIN = RX_HOME;
 int RX_MAX = RX_HOME + X_max_travel;
-int RX_position = 0;
 
 int LY_HOME = 752;
 int LY_MIN = LY_HOME;
 int LY_MAX = LY_HOME + Y_max_travel;
-int LY_position = 0;
 
 int RY_HOME = 2235;
 int RY_MAX = RY_HOME;
-int RY_MIN = RY_HOME - Y_max_travel; ///here bug? RY_MIN = 1050
-int RY_position = 0;
+int RY_MIN = RY_HOME - Y_max_travel;
 
 int flipper_HOME = 750;
 int flipper_MIN = flipper_HOME;
 int flipper_MAX = flipper_HOME + flipper_max_travel;
-int flipper_position = 0;
 
 int claw_HOME = 1060;
 int claw_MIN = claw_HOME;
 int claw_MAX = claw_HOME + claw_max_travel;
-int claw_position = 0;
 
 int L_V_center = 1477;
 int L_V_max = 1900;
@@ -107,10 +108,7 @@ bool POWER_ON = false;
 
 int R_H, R_V, L_V, L_H, GEAR, GYRO;
 int LX, LY, RX, RY;
-
-
-
-
+int w;
 
 void loop() {
   
@@ -139,7 +137,7 @@ void loop() {
             POWER_ON = true;
             digitalWrite(13, HIGH);
             //awakening(); // move all servos from home position to work/center position
-            startFromCenter(690, 900); // go to center position immediately
+            startFromCenter(); // attach servos and go to center/home position
         } else {
             digitalWrite(13, LOW);
         }
@@ -155,9 +153,9 @@ void loop() {
             }        
         } else {    //Manual mode
             switch (mode) {
-                case 0: manualModeA(700, 865, 300, 300); break;
-                case 1: manualModeB(950, 865, 300, 300); break;
-                case 2: manualModeC(800, 865, 300, 300); break;
+                case 0: manualModeA(0, 0, 300, 300); break;
+                case 1: manualModeB(200, 0, 300, 300); break;
+                case 2: manualModeC(200, 200, 200, 200); break;
             }
         }
   } else {
@@ -172,98 +170,84 @@ void loop() {
 }
 
 
-
-
-
-void LXservoMove (int q) {
-     int w = LX_HOME - q;
-     if (w >= LX_MIN && w <= LX_MAX) {
-        LX_position = q;
-        LXservo.writeMicroseconds(w);
-     }
+void LXmove (int q) {
+      w = LX_0f - q;
+      if (w >= LX_MIN && w <= LX_MAX) { LX_pos = q;   LXservo.writeMicroseconds(w); }
 }
 
-void RXservoMove (int q) {
-     int w = RX_HOME + q;
-     if (w >= RX_MIN && w <= RX_MAX) {
-        RX_position = q;
-        RXservo.writeMicroseconds(w);
-     }
+void RXmove (int q) {
+      w = RX_0f + q;
+      if (w >= RX_MIN && w <= RX_MAX) { RX_pos = q;   RXservo.writeMicroseconds(w); }
 }
 
-void LYservoMove (int q) {
-     int w = LY_HOME + q;
-     if (w >= LY_MIN && w <= LY_MAX) {
-        LY_position = q;
-//        Serial.print("LY_w: "); Serial.println(w);
-        LYservo.writeMicroseconds(w);
-        
-     }
+void LYmove (int q) {
+      w = LY_0f + q;
+      if (w >= LY_MIN && w <= LY_MAX) { LY_pos = q;   LYservo.writeMicroseconds(w); }
 }
 
-void RYservoMove (int q) {
-     int w = RY_HOME - q;
-     if (w >= RY_MIN && w <= RY_MAX) {
-        RY_position = q;
-//        Serial.print("RY_w: "); Serial.println(w); 
-        RYservo.writeMicroseconds(w);
-     }
+void RYmove (int q) {
+      w = RY_0f - q;
+      if (w >= RY_MIN && w <= RY_MAX) { RY_pos = q;   RYservo.writeMicroseconds(w); }
 }
 
 void flipperMove (int q) {
       int w = flipper_HOME + q;
-      if (w >= flipper_MIN && w <= flipper_MAX) { 
-          flipper_position = q;
-          flipperServo.writeMicroseconds(w);
-      }
+      if (w >= flipper_MIN && w <= flipper_MAX) { flipper_pos = q;    flipperServo.writeMicroseconds(w); }
 }
-
 
 void clawMove (int q) {
       int w = claw_HOME + q;
-      if (w >= claw_MIN && w <= claw_MAX) {
-          claw_position = q;
-          clawServo.writeMicroseconds(w);
-      }
-      
+      if (w >= claw_MIN && w <= claw_MAX) { claw_pos = q;    clawServo.writeMicroseconds(w); }
 }
 
 //// Each axis on sticks control each servo on robot arms
-void manualModeA (int x_center, int y_center, int x_max, int y_max) {
-              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
-              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
-              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max);
-              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max);
-              LXservoMove(LX); 
-              RXservoMove(RX);
-              LYservoMove(LY);
-              RYservoMove(RY);
+void manualModeA (int x_center_offset, int y_center_offset, int x_max, int y_max) {
+              LX_0f = LX_0 - x_center_offset;
+              RX_0f = RX_0 + x_center_offset;
+              LY_0f = LY_0 + y_center_offset;
+              RY_0f = RY_0 - y_center_offset;
+              LX = map(L_V, L_V_center, 1900, 0, 0 - x_max);
+              RX = map(R_V, R_V_center, 1900, 0, 0 - x_max);
+              LY = map(L_H, L_H_center, 1900, 0, 0 + y_max);
+              RY = map(R_H, R_H_center, 1900, 0, 0 - y_max);
+              LXmove(LX); 
+              RXmove(RX);
+              LYmove(LY);
+              RYmove(RY);
 }
 
 //// Left stick control claw rotation in OPEN LOOP, and servo on gripper
 //// Right stick control arms synchronously.
-void manualModeB (int x_center, int y_center, int x_max, int y_max)  {
-              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
-              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
-              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max);
-              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max);
-              LXservoMove(RX); 
-              RXservoMove(RX);
-              LYservoMove(RY);
-              RYservoMove(RY);
+void manualModeB (int x_center_offset, int y_center_offset, int x_max, int y_max)  {
+              LX_0f = LX_0 - x_center_offset;
+              RX_0f = RX_0 + x_center_offset;
+              LY_0f = LY_0 + y_center_offset;
+              RY_0f = RY_0 - y_center_offset;
+              LX = map(L_V, L_V_center, 1900, 0, 0 - x_max);
+              RX = map(R_V, R_V_center, 1900, 0, 0 - x_max);
+              LY = map(L_H, L_H_center, 1900, 0, 0 + y_max);
+              RY = map(R_H, R_H_center, 1900, 0, 0 - y_max);
+              LXmove(RX); 
+              RXmove(RX);
+              LYmove(RY);
+              RYmove(RY);
 }
 
 //// Left stick control claw rotation in CLOSED LOOP, and servo on gripper
 //// Right stick control arms synchronously.
-void manualModeC (int x_center, int y_center, int x_max, int y_max)  {
-              LX = map(L_V, L_V_center, 1900, x_center, x_center-x_max);
-              RX = map(R_V, R_V_center, 1900, x_center, x_center-x_max);
-              LY = map(L_H, L_H_center, 1900, y_center, y_center+y_max); //dont change
-              RY = map(R_H, R_H_center, 1900, y_center, y_center-y_max); //dont change
-              LXservoMove(x_center+765-RX); 
-              RXservoMove(RX);
-              LYservoMove(RY); 
-              RYservoMove(RY);
+void manualModeC (int x_center_offset, int y_center_offset, int x_max, int y_max)  {
+              LX_0f = LX_0 - x_center_offset;
+              RX_0f = RX_0 + x_center_offset;
+              LY_0f = LY_0 + y_center_offset;
+              RY_0f = RY_0 - y_center_offset;
+              LX = map(L_V, L_V_center, 1900, 0, 0 - x_max);
+              RX = map(R_V, R_V_center, 1900, 0, 0 - x_max);
+              LY = map(L_H, L_H_center, 1900, 0, 0 + y_max);
+              RY = map(R_H, R_H_center, 1900, 0, 0 - y_max);
+              LXmove(RX); 
+              RXmove(RX);
+              LYmove(RY);
+              RYmove(RY);
 }
 
 void walkAlgorithmA () {}
@@ -278,93 +262,17 @@ void showOffB () {}
 
 void showOffC () {}
 
-void startFromCenter (int x, int y) {
-      LXservo.attach(LXservoPin);
-      LXservoMove(x);
-      RXservo.attach(RXservoPin);
-      RXservoMove(x);
-      LYservo.attach(LYservoPin);
-      LYservoMove(y);
-      RYservo.attach(RYservoPin);
-      RYservoMove(y);
- 
-      flipperServo.attach(flipperServoPin); 
-      flipperMove(0);
-      
-      clawServo.attach(clawServoPin);
-      clawMove(0);
-  }
+void startFromCenter () {
+      LXservo.attach(LXservoPin);      LXmove(0);
+      RXservo.attach(RXservoPin);      RXmove(0);
+      LYservo.attach(LYservoPin);      LYmove(0);
+      RYservo.attach(RYservoPin);      RYmove(0);
+
+      flipperServo.attach(flipperServoPin);       flipperMove(0);
+      clawServo.attach(clawServoPin);             clawMove(0);
+}
 
 void awakening () {
-  
-      LXservo.attach(LXservoPin);
-      LXservo.writeMicroseconds(LX_HOME);
-      LYservo.attach(LYservoPin);
-      LYservo.writeMicroseconds(LY_HOME);
-      RXservo.attach(RXservoPin);
-      RXservo.writeMicroseconds(RX_HOME);
-      RYservo.attach(RYservoPin);
-      RYservo.writeMicroseconds(RY_HOME);
- 
-      flipperServo.attach(flipperServoPin); 
-      flipperServo.writeMicroseconds(flipper_HOME); // 500min, 2400max 
-      
-      clawServo.attach(clawServoPin);
-      clawServo.writeMicroseconds(claw_HOME);
-
-      delay(100);
-      clawServo.detach();
-
-      for(int i=0; i<= 300; i++) {
-          LXservoMove(i);
-          delay(6);
-      }
-      delay(2000);
-      for(int i=0; i<= 300; i++) {
-          RXservoMove(i);
-          LXservoMove(300-i);
-          delay(2);
-      }
-      delay(1000);
-      for(int i=0; i<= 300; i++) {
-          LXservoMove(i);
-          delay(4);
-      }
-      
-      clawServo.attach(clawServoPin);
-      clawMove(claw_max_travel);
-      flipperMove(flipper_max_travel);  
-      
-      LXservoMove(LX_position + 390); 
-      RXservoMove(RX_position + 390);
-      LYservoMove(LY_position + 1200);
-      RYservoMove(RY_position + 1200);
-
-      delay(2000);
-      
-      while (claw_position>0) {
-             claw_position--;
-             clawMove(claw_position);
-             delay(1);
-      }
-      clawServo.detach();
-      delay(500);
-
-      while (flipper_position>0) {
-             flipper_position--;
-             flipperMove(flipper_position);
-             delay(1);
-      }
-
-      delay(500);
-      
-      while (LY_position>900){
-             LY_position--;
-             RY_position--;
-             LYservoMove(LY_position);
-             RYservoMove(RY_position);
-             delay(1);
-       }
-
+    //temp deleted
 }
 
