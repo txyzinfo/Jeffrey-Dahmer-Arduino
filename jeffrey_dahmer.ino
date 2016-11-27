@@ -4,7 +4,7 @@
 //  /\__|    \  ___/|  |   |  |   |  | \/\  ___/\___  |  |    `   \/ __ \|   Y  \  Y Y  \  ___/|  | \/
 //  \________|\___  >__|   |__|   |__|    \___  > ____| /_______  (____  /___|  /__|_|  /\___  >__|   
 //                \/                          \/\/              \/     \/     \/      \/     \/       
-//  v 0.9
+//  v 0.95
 //  code tested on Teensy 3.1 and it will work the same on 3.2
 
 #include <Servo.h> 
@@ -32,20 +32,23 @@ Servo LXservo;
 Servo LYservo;
 Servo RXservo;
 Servo RYservo;
-Servo flipperServo;
-Servo clawServo;
+Servo FLIPPERservo;
+Servo CLAWservo;
 
 int X_max_travel = 1400; //max travel from home position
 int Y_max_travel = 1400;
 int flipper_max_travel = 750;
 int claw_max_travel = 485;
 
-int LX_0 = 1560, LX_0f = LX_0;
-int LY_0 = 1620, LY_0f = LY_0;
-int RX_0 = 1500, RX_0f = RX_0;
-int RY_0 = 1370, RY_0f = RY_0;
+int LX_0 = 1560,    LX_0f = LX_0;
+int LY_0 = 1620,    LY_0f = LY_0;
+int RX_0 = 1500,    RX_0f = RX_0;
+int RY_0 = 1370,    RY_0f = RY_0;
 
-int LX_pos, LY_pos, RX_pos, RY_pos, flipper_pos, claw_pos = 0;
+int CLAW_0 = 1300;
+int FLIPPER_0 = 1125;
+
+int LX_pos, LY_pos, RX_pos, RY_pos, FLIPPER_pos, CLAW_pos;
 
 int LX_HOME = 2250;
 int LX_MAX = LX_HOME;
@@ -94,11 +97,6 @@ void setup() {
   pinMode(h_bridge_FB, INPUT);
   pinMode(sharpSensor, INPUT);
 
-  //testing H-bridge first time
-  digitalWrite(h_bridge_PWM, LOW);
-  digitalWrite(h_bridge_2, HIGH);
-  digitalWrite(h_bridge_1, LOW);
- 
   myIn.begin(RC_receiver); // PPM Stream input pin (receiver connected to this pin)
 }
 
@@ -138,9 +136,14 @@ void loop() {
             digitalWrite(13, HIGH);
             //awakening(); // move all servos from home position to work/center position
             startFromCenter(); // attach servos and go to center/home position
+        } else if (L_V>1900 && R_V<1100) {
+             POWER_ON = true;
+             digitalWrite(13, HIGH);
+             startWithoutArms(); 
         } else {
-            digitalWrite(13, LOW);
+             digitalWrite(13, LOW);
         }
+        
   }
 
 
@@ -169,6 +172,17 @@ void loop() {
 
 }
 
+void DCmotorOpenLoop (int p) {
+      int in1 = 0; int in2 = 0;
+      if (p>=-255 && p<=255) {
+            if (p<0) { p*=-1;   in1 = 0;   in2 = 1; } else
+            if (p>0) {          in1 = 1;   in2 = 0; }
+      analogWrite(h_bridge_PWM, p);
+      digitalWrite(h_bridge_1, in1);
+      digitalWrite(h_bridge_2, in2);
+      }
+}
+
 
 void LXmove (int q) {
       w = LX_0f - q;
@@ -190,14 +204,14 @@ void RYmove (int q) {
       if (w >= RY_MIN && w <= RY_MAX) { RY_pos = q;   RYservo.writeMicroseconds(w); }
 }
 
-void flipperMove (int q) {
-      int w = flipper_HOME + q;
-      if (w >= flipper_MIN && w <= flipper_MAX) { flipper_pos = q;    flipperServo.writeMicroseconds(w); }
+void CLAWmove (int q) {
+      int w = CLAW_0 + q;
+      if (w >= claw_MIN && w <= claw_MAX) { CLAW_pos = q;  CLAWservo.writeMicroseconds(w); }
 }
 
-void clawMove (int q) {
-      int w = claw_HOME + q;
-      if (w >= claw_MIN && w <= claw_MAX) { claw_pos = q;    clawServo.writeMicroseconds(w); }
+void FLIPPERmove (int q) {
+      int w = FLIPPER_0 + q;
+      if (w >= flipper_MIN && w <= flipper_MAX) { FLIPPER_pos = q;    FLIPPERservo.writeMicroseconds(w); }
 }
 
 //// Each axis on sticks control each servo on robot arms
@@ -223,14 +237,17 @@ void manualModeB (int x_center_offset, int y_center_offset, int x_max, int y_max
               RX_0f = RX_0 + x_center_offset;
               LY_0f = LY_0 + y_center_offset;
               RY_0f = RY_0 - y_center_offset;
-              LX = map(L_V, L_V_center, 1900, 0, 0 - x_max);
               RX = map(R_V, R_V_center, 1900, 0, 0 - x_max);
-              LY = map(L_H, L_H_center, 1900, 0, 0 + y_max);
               RY = map(R_H, R_H_center, 1900, 0, 0 - y_max);
               LXmove(RX); 
               RXmove(RX);
               LYmove(RY);
               RYmove(RY);
+              LX = map(L_V, L_V_center, 1900, 0, claw_max_travel/2); // Left Vertical Stick responsible for claw servo
+              LY = map(L_H, L_H_center, 1900, 0, 255);        // Left Horizontal stick responsible for DC motor speed rotation
+              //Serial.print(LX); Serial.print("\t"); Serial.println(LY);
+              CLAWmove(LX);
+              DCmotorOpenLoop(LY);
 }
 
 //// Left stick control claw rotation in CLOSED LOOP, and servo on gripper
@@ -240,14 +257,13 @@ void manualModeC (int x_center_offset, int y_center_offset, int x_max, int y_max
               RX_0f = RX_0 + x_center_offset;
               LY_0f = LY_0 + y_center_offset;
               RY_0f = RY_0 - y_center_offset;
-              LX = map(L_V, L_V_center, 1900, 0, 0 - x_max);
-              RX = map(R_V, R_V_center, 1900, 0, 0 - x_max);
-              LY = map(L_H, L_H_center, 1900, 0, 0 + y_max);
-              RY = map(R_H, R_H_center, 1900, 0, 0 - y_max);
-              LXmove(RX); 
-              RXmove(RX);
-              LYmove(RY);
-              RYmove(RY);
+              RX = map(R_V, R_V_center, 1900, 0, flipper_max_travel/2); // Right Vertical Stick responsible for flipper servo
+              LX = map(L_V, L_V_center, 1900, 0, claw_max_travel/2);    // Left Vertical Stick responsible for claw servo
+              LY = map(L_H, L_H_center, 1900, 0, 255);                  // Left Horizontal stick responsible for DC motor speed rotation
+              Serial.print(LX); Serial.print("\t"); Serial.println(LY);
+              CLAWmove(LX);
+              FLIPPERmove(RX);
+              DCmotorOpenLoop(LY);
 }
 
 void walkAlgorithmA () {}
@@ -268,8 +284,13 @@ void startFromCenter () {
       LYservo.attach(LYservoPin);      LYmove(0);
       RYservo.attach(RYservoPin);      RYmove(0);
 
-      flipperServo.attach(flipperServoPin);       flipperMove(0);
-      clawServo.attach(clawServoPin);             clawMove(0);
+      FLIPPERservo.attach(flipperServoPin);       FLIPPERservo.writeMicroseconds(flipper_HOME);
+      CLAWservo.attach(clawServoPin);             CLAWservo.writeMicroseconds(claw_HOME);
+}
+
+void startWithoutArms () { 
+      FLIPPERservo.attach(flipperServoPin);       FLIPPERservo.writeMicroseconds(flipper_HOME);
+      CLAWservo.attach(clawServoPin);             CLAWservo.writeMicroseconds(claw_HOME);
 }
 
 void awakening () {
